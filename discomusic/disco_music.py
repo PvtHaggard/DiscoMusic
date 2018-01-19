@@ -66,8 +66,7 @@ class DiscoMusic(discord.Client):
         log.debug("cmd_join")
         author = message.author
         if author.voice_channel is None:
-            await self.send_message(message.channel, "You must join a voice channel so I can join you".format(
-                self.config.prefix))
+            await self.send_message(message.channel, "You must join a voice channel so I can join you")
             return
 
         await self.join_voice_channel(author.voice_channel)
