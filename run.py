@@ -3,11 +3,12 @@ import os
 import gc
 import aiohttp
 import traceback
+venv_path = r"/venv/bin/activate_this.py"
 
 if sys.platform == "win32":
-    activate_this = os.path.normpath(os.getcwd() + r"/venv/Scripts/activate_this.py")
-else:
-    activate_this = os.path.normpath(os.getcwd() + r"/venv/bin/activate_this.py")
+    venv_path = r"/venv/Scripts/activate_this.py"
+
+activate_this = os.path.normpath(os.getcwd() + venv_path)
 
 
 with open(activate_this) as file_:
