@@ -1,30 +1,47 @@
 from urllib.parse import urlparse, parse_qs
 import traceback
+import datetime
 import logging
 import asyncio
 import json
+import time
+import re
 
 import discord
 import requests
 
-from discomusic import config
+from discomusic import config, music_player
 
 log = logging.getLogger("discomusic")
 
 
-def admin(func):
+def bot_admin(func):
     async def authenticate(self, *args, **kwargs):
-        if args[0].author.id not in self.config.moderators:
+        if args[0].author.id not in self.config.admins:
             await self.send_message(args[0].channel, "This is an admin only command!")
             return
         return await func(self, *args, **kwargs)
     return authenticate
 
 
+def server_admin(func):
+    async def authenticate(self, *args, **kwargs):
+        if args[0].author.id not in self.config.admins:
+            await self.send_message(args[0].channel, "This is an admin only command!")
+            return
+        return await func(self, *args, **kwargs)
+    return authenticate
+
+
+def disable(func):
+    return
+
+
 class DiscoMusic(discord.Client):
     def __init__(self):
         self.config = config.Config()
-        self.players = {}
+        self.voice_states = {}
+        self.no_afk_members = {}  # {user ID: unlock time]
         super().__init__()
 
     def run(self):
@@ -61,44 +78,58 @@ class DiscoMusic(discord.Client):
             except AttributeError as e:
                 log.debug(e)
                 await self.send_message(message.channel, "That is not a valid command")
+            except TypeError as e:
+                log.debug(e)
+                await self.send_message(message.channel, "That command is disabled")
 
+    @server_admin
+    @disable
     async def cmd_join(self, message: discord.Message):
-        log.debug("cmd_join")
         author = message.author
         if author.voice_channel is None:
             await self.send_message(message.channel, "You must join a voice channel so I can join you")
             return
 
-        await self.join_voice_channel(author.voice_channel)
+        try:
+            await self.create_voice_client(author.voice_channel)
+        except discord.ClientException:
+            await self.voice_client_in(author.server).move_to(author.voice_channel)
 
+        return True
+
+    @disable
     async def cmd_leave(self, message: discord.Message):
-        log.debug("cmd_leave")
         author = message.author
         if self.is_voice_connected(author.server):
             log.debug("Leaving")
             await self.voice_client_in(message.server).disconnect()
 
+    @server_admin
+    @disable
     async def cmd_play(self, message: discord.Message):
-        log.debug("cmd_play")
-        author = message.author
-        if not self.is_voice_connected(author.server):
-            await self.cmd_join(message)
+        state = self.get_voice_state(message.server)
+        opts = {'format': 'worstaudio', 'default_search': 'auto', 'quiet': True, 'outtmpl': '/cache/%(title)s.%(ext)s'}
 
-        if self.voice_client_in(author.server).channel != author.voice_channel:
-            await self.voice_client_in(author.server).move_to(author.voice_channel)
+        if state.voice is None:
+            success = await self.cmd_join(message)
+            if not success:
+                return
 
-        player = self.players.get(message.server, None)
-
+        #
+        #   Split url from message or un-pause music
         try:
             cmd_url = message.content.split()[1]
         except IndexError:
-            if player is not None:
-                player.resume()
+            await self.cmd_pause(message)
             return
 
+        #
+        #   Build playlist
         if "list" in parse_qs(urlparse(cmd_url).query):
+            log.debug("Found playlist {}".format(cmd_url))
             try:
                 playlist = self.get_playlist(parse_qs(urlparse(cmd_url).query)["list"])
+                await self.send_message(message.channel, "Found {} song/s in playlist".format(len(playlist)))
             except requests.exceptions.HTTPError:
                 trace = traceback.format_exc()
                 log.debug("Something has gone wrong:{}".format(trace))
@@ -107,16 +138,21 @@ class DiscoMusic(discord.Client):
         else:
             playlist = [cmd_url]
 
-        log.debug("{} song/s added to playlist.".format(len(playlist)))
-        await self.send_message(message.channel, "`{}` videos added to playlist.".format(len(playlist)))
+        print(playlist)
 
-        if player is None:
-            voice = self.voice_client_in(author.server)
-            # player = voice.create_ffmpeg_player(os.path.realpath(path="./cache/Amber Run - I Found.wma"))
-            player.volume = self.config.volume
-            player.start()
-            self.players[message.server] = player
+        #
+        #   Add each song in the playlist to the player
+        for song in playlist:
+            try:
+                player = await state.voice.create_ytdl_player(song, ytdl_options=opts, after=state.toggle_next)
+            except Exception:
+                log.debug(traceback.format_exc())
+            else:
+                player.volume = self.config.volume
+                entry = music_player.VoiceEntry(message, player)
+                await state.songs.put(entry)
 
+    @disable
     async def cmd_stop(self, message: discord.Message):
         log.debug("cmd_stop")
         player = self.players.get(message.server, None)
@@ -125,6 +161,7 @@ class DiscoMusic(discord.Client):
         else:
             player.stop()
 
+    @disable
     async def cmd_pause(self, message: discord.Message):
         log.debug("cmd_pause")
         player = self.players.get(message.server, None)
@@ -136,8 +173,10 @@ class DiscoMusic(discord.Client):
     # TODO: cmd_skip
     # TODO: cmd_nowplaying
     # TODO: cmd_list
+    # TODO: cmd_volume
+    # TODO: cmd_reload_config
 
-    @admin
+    @server_admin
     async def cmd_purge(self, message: discord.Message):
         offset = 2  # Used to account for the users message and the bots reply.
         limit = 5  # Number of messages to remove
@@ -164,13 +203,36 @@ class DiscoMusic(discord.Client):
 
     # TODO: cmd_restart
 
-    @admin
+    @bot_admin
     async def cmd_shutdown(self, message: discord.Message):
         await self.send_message(message.channel, "Shutting down bot!")
         await self.logout()
 
+    @disable
     async def cmd_help(self, message: discord.Message):
         await self.send_message(message.author, "TODO")
+
+    def get_voice_state(self, server):
+        state = self.voice_states.get(server.id)
+        if state is None:
+            state = music_player.VoiceState(self)
+            self.voice_states[server.id] = state
+
+        return state
+
+    async def create_voice_client(self, channel):
+        voice = await self.join_voice_channel(channel)
+        state = self.get_voice_state(channel.server)
+        state.voice = voice
+
+    def __unload(self):
+        for state in self.voice_states.values():
+            try:
+                state.audio_player.cancel()
+                if state.voice:
+                    self.loop.create_task(state.voice.disconnect())
+            except:
+                pass
 
     def get_playlist(self, list_id):
         api_url = "https://www.googleapis.com/youtube/v3/playlistItems?key={}&playlistId={}&part=snippet&maxResults=50"
@@ -187,4 +249,40 @@ class DiscoMusic(discord.Client):
             urls[i["snippet"]["title"]] = prefix + i["snippet"]["resourceId"]["videoId"]
         return urls
 
+    async def cmd_no_afk(self, message: discord.Message):
+        # .no_afk channel 241523419521351680
+        # .no_afk @USER     (Default time sever set)
+        # .no_afk @USER 1h30m
+        # .no_afk @USER1 @USER2 @USER3 1h30m
+        # .no_afk 1h30m
+
+        channel = re.search(r"\d{18}(?!channel )", message.content, re.IGNORECASE)
+        if channel is not None:
+            # TODO: Add channel to servers no move
+            return
+
+        minutes = 0
+        try:
+            minutes += int(re.search(r"\d+(?=h)", message.content, re.IGNORECASE).group(0))
+        except AttributeError:
+            pass
+
+        try:
+            minutes += int(re.search(r"\d+(?=m)", message.content, re.IGNORECASE).group(0))
+        except AttributeError:
+            pass
+
+        self.no_afk_members[message.author.id] = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
+
+        await self.send_message(message.channel, "Preventing voice chat timeout for {} minutes".format(minutes))
+
+    async def on_voice_state_update(self, before: discord.Member, after: discord.Member):
+        if after.id not in self.no_afk_members.keys():
+            return
+
+        if after.is_afk:
+            if (self.no_afk_members[after.id] - datetime.datetime.now()).days == -1:
+                del self.no_afk_members[after.id]
+            else:
+                await self.move_member(after, before.voice_channel)
 

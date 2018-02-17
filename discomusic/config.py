@@ -19,9 +19,10 @@ class Config(configparser.ConfigParser):
         self.prefix = self.get("config", "prefix", fallback='/')
         self.volume = self.getfloat("config", "volume", fallback=0.5)
 
+        # Bot Admins/Dev
         self.admins = re.findall(r"(\d{18})", self.get("config", "admins", fallback=""))
-        self.moderators = re.findall(r"(\d{18})", self.get("config", "moderators", fallback="")) + self.admins
 
+        # TODO: This should be moved to a server specific config
         self.channel_whitelist = re.findall(r"(\d{18})", self.get("config", "channel_whitelist", fallback=""))
 
     def load_config(self):

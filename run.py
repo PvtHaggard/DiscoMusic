@@ -1,8 +1,8 @@
 import sys
 import os
 import gc
-import aiohttp
 import traceback
+
 venv_path = r"/venv/bin/activate_this.py"
 
 if sys.platform == "win32":
