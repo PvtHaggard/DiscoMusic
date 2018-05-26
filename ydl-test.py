@@ -5,8 +5,8 @@ import youtube_dl
 
 ydl_opts = {
     'format': 'worstaudio',
-    'outtmpl': '/cache/%(title)s.%(ext)s',
-    'noplaylist': False
+    'noplaylist': False,
+    'download': False
 }
 
 youtube_dl.YoutubeDL(ydl_opts).download(['www.youtube.com/watch?v=Yj6V_a1-EUA'])

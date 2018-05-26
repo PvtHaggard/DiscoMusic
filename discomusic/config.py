@@ -5,7 +5,7 @@ import re
 import discomusic.exceptions
 
 
-class Config(configparser.ConfigParser):
+class BotConfig:
     def __init__(self):
         super().__init__()
         self.load_config()
@@ -31,3 +31,7 @@ class Config(configparser.ConfigParser):
             raise discomusic.exceptions.ConfigFileMissing()
 
         self.read(os.path.realpath(path))
+
+
+# bot = discord_token, google_key, cmd_prefix, volume, bot_admin, afk_timeout_mins
+# server = server_id, cmd_prefix, volume, channel_whitelist, afk_timeout_mins, afk_timeout_channels
