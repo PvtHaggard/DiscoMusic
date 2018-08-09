@@ -32,11 +32,15 @@ _server_config_path = os.path.realpath(path="./config/server_config.ini")
 # TODO: cmd_pause
 # TODO: cmd_restart
 # TODO: cmd_repeat
-# TODO: cmd_skip
+# TODO: cmd_next
+# TODO: cmd_replay
+# TODO: cmd_clear
 # TODO: cmd_nowplaying cmd_np
 # TODO: cmd_list
 
+# TODO: cmd_cleanup
 # TODO: cmd_help cmd_h
+# TODO: cmd_develop
 # TODO: cmd_admin restart
 
 
