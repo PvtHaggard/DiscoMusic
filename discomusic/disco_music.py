@@ -1,18 +1,15 @@
 from urllib.parse import urlparse, parse_qs
-import configparser
-import traceback
-import datetime
+from configparser import ConfigParser
 import logging
 import asyncio
 import json
-import time
 import os
 import re
 
 import discord
 import requests
 
-from discomusic import music_player, exceptions
+from discomusic import exceptions, constants
 
 log = logging.getLogger("discomusic")
 
@@ -20,9 +17,6 @@ _command_aliases = {"p": "pause",
                     "s": "stop",
                     "np": "nowplaying",
                     "h": "help"}
-
-_config_path = os.path.realpath(path="./config/config.ini")
-_server_config_path = os.path.realpath(path="./config/server_config.ini")
 
 # TODO: cmd_join
 # TODO: cmd_leave
@@ -63,6 +57,21 @@ def server_admin(func):
     return authenticate
 
 
+def blacklist(func):
+    async def authenticate(self, *args, **kwargs):
+        if self.sever_configs.has_section(args[0].server.id):
+            bl = self.sever_configs.get(args[0].server.id, "blacklist").split()
+        else:
+            bl = []
+
+        if args[0].author.id not in bl:
+            return await func(self, *args, **kwargs)
+        await self.send_message(args[0].channel, "You can not do that.")
+        return
+
+    return authenticate
+
+
 def disable(func):
     return
 
@@ -73,6 +82,7 @@ class DiscoMusic(discord.Client):
         self.sever_configs = self.load_server_configs()
 
         self.voice_states = {}
+        print(constants.CONFIG_PATH)
         super().__init__()
 
     def run(self):
@@ -133,7 +143,7 @@ class DiscoMusic(discord.Client):
         try:
             limit = int(message.content.split(' ')[-1])
         except ValueError:
-            # Will user default limit value
+            # Will user DEFAULT limit value
             await self.send_message(message.channel, "Invalid limit, defaulting to 5 posts.".format(limit))
             offset += 1
             pass
@@ -160,12 +170,13 @@ class DiscoMusic(discord.Client):
             return
 
         server = "DEFAULT"
+
         if self.sever_configs.has_section(message.server.id):
             server = str(message.server.id)
 
-        await self.send_message(message.channel, "Volume set to {:d} was {:.0f}".format(volume, self.sever_configs.getfloat(server, "volume") * 100))
+        self.update_server_config(message.server.id, volume=float(volume) / 100)
 
-        self.update_server_config(message.server.id, volume=float(volume)/100)
+        await self.send_message(message.channel, "Volume set to {:d} was {:.0f}".format(volume, self.sever_configs.getfloat(server, "volume") * 100))
 
     @server_admin
     async def cmd_prefix(self, message: discord.Message):
@@ -187,16 +198,6 @@ class DiscoMusic(discord.Client):
         await self.send_message(message.channel, "Shutting down bot!")
         await self.logout()
 
-    def update_server_config(self, server_id, **kwargs):
-        if not self.sever_configs.has_section(server_id):
-            self.sever_configs.add_section(server_id)
-
-        for key in kwargs:
-            self.sever_configs[str(server_id)][key] = str(kwargs[key])
-
-        with open(_server_config_path, 'w') as file:
-            self.sever_configs.write(file)
-
     def get_playlist(self, list_id):
         def build_playlist(json_data):
             prefix = "www.youtube.com/watch?v="
@@ -206,31 +207,53 @@ class DiscoMusic(discord.Client):
             return urls
 
         api_url = "https://www.googleapis.com/youtube/v3/playlistItems?key={}&playlistId={}&part=snippet&maxResults=50"
-        log.debug(api_url.format(self.config.google_key, list_id[0]))
-        page = requests.get(api_url.format(self.config.google_key, list_id[0]))
+        log.debug(api_url.format(self.config.get("google API", "key"), list_id[0]))
+        page = requests.get(api_url.format(self.config.get("google API", "key"), list_id[0]))
         page.raise_for_status()
         return build_playlist(json.loads(page.text))
 
     @staticmethod
     def load_config():
-        conf = configparser.ConfigParser()
-        path = os.path.realpath(path=_config_path)
-        if not os.path.isfile(path):
+        config_parser = ConfigParser()
 
-            raise exceptions.ConfigFileMissing
-        conf.read(path)
-        return conf
+        if not os.path.isfile(constants.CONFIG_PATH):
+            # TODO: should create folder structure as well?
+            log.error("Config file missing, template generated in: {}".format(constants.CONFIG_PATH))
 
-    def load_server_configs(self):
-        conf = configparser.ConfigParser()
-        path = os.path.realpath(path=_server_config_path)
+            if not os.path.exists(os.path.dirname(constants.CONFIG_PATH)):
+                os.makedirs(os.path.dirname(constants.CONFIG_PATH))
 
-        if not os.path.isfile(path):
-            self.update_server_config("default", volume=0.5, prefix='/')
+            with open(constants.CONFIG_PATH, "w+") as file:
+                config_parser.read_dict(constants.CONFIG_TEMPLATE)
+                config_parser.write(file)
 
-        conf.read(path)
-        return conf
+            raise exceptions.ConfigFileMissing()
 
+        config_parser.read(constants.CONFIG_PATH)
+        return config_parser
+
+    @staticmethod
+    def load_server_configs():
+        config_parser = ConfigParser()
+
+        if not os.path.isfile(constants.SERVER_CONFIG_PATH):
+            log.info("Server config missing, default config generated in: {}".format(constants.SERVER_CONFIG_PATH))
+            with open(constants.SERVER_CONFIG_PATH, "w+") as file:
+                config_parser.read_dict(constants.SERVER_CONFIG_TEMPLATE)
+                config_parser.write(file)
+
+        config_parser.read(constants.SERVER_CONFIG_PATH)
+        return config_parser
+
+    def update_server_config(self, server_id, **kwargs):
+        if not self.sever_configs.has_section(server_id):
+            self.sever_configs.add_section(server_id)
+
+        for key in kwargs:
+            self.sever_configs[str(server_id)][key] = str(kwargs[key])
+
+        with open(constants.SERVER_CONFIG_PATH, 'w') as file:
+            self.sever_configs.write(file)
 
 
     # async def cmd_no_afk(self, message: discord.Message):
