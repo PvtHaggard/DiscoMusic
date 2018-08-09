@@ -1,7 +1,6 @@
 import logging
 
 from .disco_music import DiscoMusic
-from .exceptions import *
 
 # Logging setup
 log = logging.getLogger(__name__)
@@ -16,5 +15,3 @@ stream_handler.setFormatter(logging.Formatter('%(levelname)s:%(name)s:%(asctime)
 
 discord_logger.addHandler(stream_handler)
 log.addHandler(stream_handler)
-
-
