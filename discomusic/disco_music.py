@@ -3,6 +3,7 @@ from configparser import ConfigParser
 import logging
 import asyncio
 import json
+import time
 import os
 import re
 
@@ -12,11 +13,6 @@ import requests
 from discomusic import exceptions, constants
 
 log = logging.getLogger("discomusic")
-
-_command_aliases = {"p": "pause",
-                    "s": "stop",
-                    "np": "nowplaying",
-                    "h": "help"}
 
 # TODO: cmd_join
 # TODO: cmd_leave
@@ -40,7 +36,7 @@ _command_aliases = {"p": "pause",
 
 def bot_admin(func):
     async def authenticate(self, *args, **kwargs):
-        if args[0].author.id not in self.config.admins:
+        if args[0].author.id not in self.config.get("bot", "admins").split():
             await self.send_message(args[0].channel, "This command requires administrator privileges.")
             return
         return await func(self, *args, **kwargs)
@@ -114,11 +110,11 @@ class DiscoMusic(discord.Client):
         else:
             prefix = self.sever_configs.get("DEFAULT", "prefix")
 
-        if message.content[0] == prefix:
+        if message.content.startswith(prefix):
             try:
                 command = message.content.split()[0][1:]
-                if command in _command_aliases.keys():
-                    command = _command_aliases[command]
+                if command in constants.COMMAND_ALIASES.keys():
+                    command = constants.COMMAND_ALIASES[command]
 
                 func = getattr(self, "cmd_" + command)
 
@@ -131,7 +127,10 @@ class DiscoMusic(discord.Client):
                 await self.send_message(message.channel, "That command is disabled")
                 return
 
-            await func(message)
+            try:
+                await func(message)
+            except discord.errors.Forbidden:
+                await self.send_message(message.channel, "Forbidden, missing permissions")
 
     @server_admin
     async def cmd_purge(self, message: discord.Message):
@@ -160,6 +159,23 @@ class DiscoMusic(discord.Client):
         else:
             await self.delete_message(message)
             await self.delete_message(reply)
+
+    @bot_admin
+    @server_admin
+    async def cmd_cleanup(self, message: discord.Message):
+        if self.sever_configs.has_section(message.server.id):
+            server_id = message.server.id
+        else:
+            server_id = "DEFAULT"
+
+        messages = []
+        async for msg in self.logs_from(message.channel, limit=100):
+            if msg.author == self.user:
+                messages.append(msg)
+            elif msg.content.startswith(self.sever_configs.get(server_id, "prefix")):
+                messages.append(msg)
+
+        await self.delete_messages(messages)
 
     @server_admin
     async def cmd_volume(self, message: discord.Message):
@@ -193,6 +209,7 @@ class DiscoMusic(discord.Client):
 
         self.update_server_config(message.server.id, prefix=prefix)
 
+    # TODO: Finish/fix
     @bot_admin
     async def cmd_shutdown(self, message: discord.Message):
         await self.send_message(message.channel, "Shutting down bot!")

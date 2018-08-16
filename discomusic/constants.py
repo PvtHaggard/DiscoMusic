@@ -10,3 +10,7 @@ CONFIG_TEMPLATE = {"bot": {"discord_token": "https://discordapp.com/developers/a
 SERVER_CONFIG_TEMPLATE = {"DEFAULT": {"prefix": '/',
                                       "volume": "0.5",
                                       "blacklist": ""}}
+COMMAND_ALIASES = {"p": "pause",
+                   "s": "stop",
+                   "np": "nowplaying",
+                   "h": "help"}
