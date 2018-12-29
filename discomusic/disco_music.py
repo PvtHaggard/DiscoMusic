@@ -164,6 +164,8 @@ class DiscoMusic(discord.Client):
             await self.delete_message(message)
             await self.delete_message(reply)
 
+    # TODO: BROKEN Doesn't work with old messages > 14 days
+    @disable
     @bot_admin
     @server_admin
     async def cmd_cleanup(self, message: discord.Message):
