@@ -235,24 +235,42 @@ class DiscoMusic(discord.Client):
         page.raise_for_status()
         return build_playlist(json.loads(page.text))
 
+    # Config file is critical and will raise exceptions.ConfigFileMissing() if missing or required values missing
     @staticmethod
     def load_config():
+        write = False
         config_parser = ConfigParser()
 
-        if not os.path.isfile(constants.CONFIG_PATH):
-            # TODO: should create folder structure as well?
+        # Generate config file from template(constants.CONFIG_PATH)
+        if os.path.isfile(constants.CONFIG_PATH):
+            config_parser.read(constants.CONFIG_PATH)
+
+            # Verify config has required data(Discord token/youtube key)
+            required = ["discord|token", "discord|admins", "youtube|token"]
+            for i in required:
+                section, option = i.split('|')
+                # Raises Key error if config option is missing also raises if option has is empty string
+                try:
+                    if len(config_parser[section][option]) == 0:
+                        raise KeyError()
+
+                except KeyError:
+                    write = True
+                    log.critical("Missing config value. Section: {} Option: {}".format(section, option))
+                    config_parser[section][option] = constants.CONFIG_TEMPLATE[section][option]
+        else:
+            write = True
             log.error("Config file missing, template generated in: {}".format(constants.CONFIG_PATH))
 
             if not os.path.exists(os.path.dirname(constants.CONFIG_PATH)):
                 os.makedirs(os.path.dirname(constants.CONFIG_PATH))
-
-            with open(constants.CONFIG_PATH, "w+") as file:
                 config_parser.read_dict(constants.CONFIG_TEMPLATE)
-                config_parser.write(file)
 
+        if write:
+            with open(constants.CONFIG_PATH, "w+") as file:
+                config_parser.write(file)
             raise exceptions.ConfigFileMissing()
 
-        config_parser.read(constants.CONFIG_PATH)
         return config_parser
 
     @staticmethod
