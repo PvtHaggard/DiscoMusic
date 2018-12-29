@@ -271,10 +271,11 @@ class DiscoMusic(discord.Client):
 
         return config_parser
 
+    # Server config file is not critical and can be loaded from template
     @staticmethod
     def load_server_configs():
         config_parser = ConfigParser()
-
+        # If the config file does not exist generate it.
         if not os.path.isfile(constants.SERVER_CONFIG_PATH):
             log.info("Server config missing, default config generated in: {}".format(constants.SERVER_CONFIG_PATH))
             with open(constants.SERVER_CONFIG_PATH, "w+") as file:
