@@ -60,13 +60,13 @@ def server_admin(func):
 def blacklist(func):
     async def authenticate(self, *args, **kwargs):
         if self.sever_configs.has_section(args[0].server.id):
-            bl = self.sever_configs.get(args[0].server.id, "blacklist").split()
+            user_blacklist = self.sever_configs.get(args[0].server.id, "user_blacklist").split()
         else:
-            bl = []
+            user_blacklist = []
 
-        if args[0].author.id not in bl:
+        if args[0].author.id not in user_blacklist:
             return await func(self, *args, **kwargs)
-        await self.send_message(args[0].channel, "You can not do that.")
+        await self.send_message(args[0].channel, "I'm sorry, Dave. I'm afraid I can't do that. Your are blacklisted.")
         return
 
     return authenticate
