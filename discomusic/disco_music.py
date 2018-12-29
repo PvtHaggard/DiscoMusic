@@ -215,7 +215,6 @@ class DiscoMusic(discord.Client):
 
         self.update_server_config(message.server.id, prefix=prefix)
 
-    # TODO: Finish/fix
     @bot_admin
     async def cmd_shutdown(self, message: discord.Message):
         await self.send_message(message.channel, "Shutting down bot!")
