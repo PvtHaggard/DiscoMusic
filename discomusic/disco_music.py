@@ -17,19 +17,19 @@ log = logging.getLogger("discomusic")
 # TODO: cmd_join
 # TODO: cmd_leave
 
-# TODO: cmd_play cmd_p
-# TODO: cmd_stop cmd_s
+# TODO: cmd_play
+# TODO: cmd_stop
 # TODO: cmd_pause
 # TODO: cmd_restart
 # TODO: cmd_repeat
 # TODO: cmd_next
-# TODO: cmd_replay
+# TODO: cmd_rewind
 # TODO: cmd_clear
-# TODO: cmd_nowplaying cmd_np
+# TODO: cmd_nowplaying
 # TODO: cmd_list
 
 # TODO: cmd_cleanup
-# TODO: cmd_help cmd_h
+# TODO: cmd_help
 # TODO: cmd_develop
 # TODO: cmd_admin restart
 
