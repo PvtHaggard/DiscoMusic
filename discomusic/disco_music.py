@@ -36,7 +36,11 @@ log = logging.getLogger("discomusic")
 
 def bot_admin(func):
     async def authenticate(self, *args, **kwargs):
-        if args[0].author.id not in self.config.get("bot", "admins").split():
+        admins = []
+        for i in self.config["discord"]["admins"].split():
+            admins += i.split(']')
+
+        if args[0].author.id not in admins:
             await self.send_message(args[0].channel, "This command requires administrator privileges.")
             return
         return await func(self, *args, **kwargs)
