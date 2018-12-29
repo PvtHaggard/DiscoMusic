@@ -86,7 +86,7 @@ class DiscoMusic(discord.Client):
 
     def run(self):
         try:
-            self.loop.run_until_complete(self.start(self.config.get("bot", "discord_token")))
+            self.loop.run_until_complete(self.start(self.config["discord"]["token"]))
         except SystemExit:
             self.loop.run_until_complete(self.logout())
             pending = asyncio.Task.all_tasks(loop=self.loop)
@@ -228,8 +228,8 @@ class DiscoMusic(discord.Client):
             return urls
 
         api_url = "https://www.googleapis.com/youtube/v3/playlistItems?key={}&playlistId={}&part=snippet&maxResults=50"
-        log.debug(api_url.format(self.config.get("google API", "key"), list_id[0]))
-        page = requests.get(api_url.format(self.config.get("google API", "key"), list_id[0]))
+        log.debug(api_url.format(self.config["youtube"]["token"], list_id[0]))
+        page = requests.get(api_url.format(self.config["youtube"]["token"], list_id[0]))
         page.raise_for_status()
         return build_playlist(json.loads(page.text))
 
