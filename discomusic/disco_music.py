@@ -82,7 +82,6 @@ class DiscoMusic(discord.Client):
         self.sever_configs = self.load_server_configs()
 
         self.voice_states = {}
-        print(constants.CONFIG_PATH)
         super().__init__()
 
     def run(self):
